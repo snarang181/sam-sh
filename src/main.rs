@@ -6,7 +6,13 @@ fn main() {
     utils::flush_buffer();
     let mut user_command = String::new();
     loop {
-        std::io::stdin().read_line(&mut user_command).expect("Failed to read line");
+        match std::io::stdin().read_line(&mut user_command) {
+            Ok(_) => {},
+            Err(error) => {
+                eprintln!("Error reading line: {}", error);
+                break;
+            }
+        }
         if user_command.trim() == "exit" {
             break;
         }
