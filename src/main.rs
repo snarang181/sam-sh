@@ -1,6 +1,4 @@
-use std::env;
-use std::io::{stdin, stdout, Write};
-use std::path::Path;
+use std::io::{stdin};
 use std::process::{Child, Command, Stdio};
 
 mod utils;
@@ -49,15 +47,64 @@ fn main() {
 
             match program { 
                 "exit" | "quit" => return,
-
-                _ => { 
-                        print!("Default case"),
-                        utils::flush_buffer();
+                program => { 
+                    /*
+                        * Handling the case where piping is involved
+                        * There are two possible cases:
+                        * 1. There is another command piped behind this one
+                        * 2. There are no more commands piped behind this one
+                        * In case of number 1, we prepare to send output to the next command
+                        * And in case of number 2, we send output to shell stdout
+                    */
+                    let std_input = prev_command.map_or(Stdio::inherit(), |output: Child| Stdio::from(output.stdout.unwrap()));
+                    let std_output;
+                    if user_commands.peek().is_some() { 
+                        /*
+                            * There are more commands
+                            * Redirect output to next command
+                        */
+                        std_output = Stdio::piped();
+                    } else { 
+                        // Redirect output to shell stdout
+                        std_output = Stdio::inherit();
                     }
-            }
+                    /*
+                        * Prepare to spawn the command with arguments of args
+                        * Stdinput is std_input, and stdout is std_output
+                        * Spawn is used to create a new process and execute the command
+                    */
+                    let curr_output = Command::new(program)
+                        .args(args)
+                        .stdin(std_input)
+                        .stdout(std_output)
+                        .spawn();
+                    /*
+                        * Check if the command was successfully spawned
+                        * If it was, set prev_command to curr_output
+                    */
+                    match curr_output { 
+                        Ok(curr_output) => { prev_command = Some(curr_output); },
+                        Err(_) => { 
+                            prev_command = None;
+                            eprintln!("Error: Command not found");
+                            utils::flush_buffer();
+                        }
+                        // _ => { 
+                        //     print!("Error: Command not found");
+                        //     utils::flush_buffer();
+                        // }
+                    }
 
-            
+                },
+                // _ => { 
+                //         print!("Default case");
+                //         utils::flush_buffer();
+                //     }
+            }
         }
-    
+        // Wait until all commands have finished executing
+        if let Some(mut last_cmd) = prev_command { 
+            last_cmd.wait().unwrap();
+        }
     }
 }
